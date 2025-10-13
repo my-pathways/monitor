@@ -96,30 +96,56 @@ function fmt(result) {
   return `✅ OK: **${envName}** - ${result.url} (${result.ms} ms, status=${result.status})`;
 }
 
-function formatStatusMessage(results, timestamp, executionTime) {
-  const upServices = results.filter(r => r.up);
-  const downServices = results.filter(r => !r.up);
-  
-  let message = "📊 **SERVICE STATUS UPDATES**\n\n";
-  
-  if (upServices.length > 0) {
-    message += "🟢 **Services Up**\n";
-    upServices.forEach(service => {
-      message += `✅ **${service.name}** - ${service.url} (${service.ms} ms, status=${service.status})\n`;
-    });
+function formatStatusMessage(results, timestamp, executionTime, isFullReport = false, changedServices = []) {
+  if (isFullReport) {
+    // Full status report (manual execution)
+    const upServices = results.filter(r => r.up);
+    const downServices = results.filter(r => !r.up);
+    
+    let message = "📊 **SERVICE STATUS REPORT**\n\n";
+    
+    if (upServices.length > 0) {
+      message += "🟢 **Services Up**\n";
+      upServices.forEach(service => {
+        message += `✅ **${service.name}** - ${service.url} (${service.ms} ms, status=${service.status})\n`;
+      });
+    }
+    
+    if (downServices.length > 0) {
+      if (upServices.length > 0) message += "\n";
+      message += "🔴 **Services Down**\n";
+      downServices.forEach(service => {
+        message += `❌ **${service.name}** - ${service.url} (status=${service.status}, error=${service.error ?? "n/a"})\n`;
+      });
+    }
+    
+    message += `\n⏰ **${timestamp} ART** | 🕐 Execution time: ${executionTime}ms`;
+    return message;
+  } else {
+    // Changes-only report
+    let message = "🔔 **SERVICE STATUS CHANGES**\n\n";
+    
+    const recoveredServices = changedServices.filter(s => s.changeType === 'recovered');
+    const downServices = changedServices.filter(s => s.changeType === 'down');
+    
+    if (recoveredServices.length > 0) {
+      message += "🎉 **Services Recovered**\n";
+      recoveredServices.forEach(service => {
+        message += `✅ **${service.name}** is back online - ${service.url} (${service.ms} ms, status=${service.status})\n`;
+      });
+    }
+    
+    if (downServices.length > 0) {
+      if (recoveredServices.length > 0) message += "\n";
+      message += "🚨 **Services Down**\n";
+      downServices.forEach(service => {
+        message += `❌ **${service.name}** went down - ${service.url} (status=${service.status}, error=${service.error ?? "n/a"})\n`;
+      });
+    }
+    
+    message += `\n⏰ **${timestamp} ART** | 🕐 Execution time: ${executionTime}ms`;
+    return message;
   }
-  
-  if (downServices.length > 0) {
-    if (upServices.length > 0) message += "\n";
-    message += "🔴 **Services Down**\n";
-    downServices.forEach(service => {
-      message += `❌ **${service.name}** - ${service.url} (status=${service.status}, error=${service.error ?? "n/a"})\n`;
-    });
-  }
-  
-  message += `\n⏰ **${timestamp} ART** | 🕐 Execution time: ${executionTime}ms`;
-  
-  return message;
 }
 
 function loadPreviousState() {
@@ -139,24 +165,33 @@ function savePreviousState(state) {
   }
 }
 
-function hasChanges(currentResults, previousState) {
-  // Only return true if there was a real state change
+function getChangedServices(currentResults, previousState) {
+  const changes = [];
+  
   for (const result of currentResults) {
     const wasUp = previousState[result.url];
     const isUp = result.up;
     
-    // If it's the first time we see this service, consider it a change
+    // Skip if it's the first time we see this service
     if (wasUp === undefined) {
-      return true;
+      continue;
     }
     
     // If there was a state change (UP->DOWN or DOWN->UP)
     if (wasUp !== isUp) {
-      return true;
+      changes.push({
+        ...result,
+        previousState: wasUp,
+        changeType: isUp ? 'recovered' : 'down'
+      });
     }
   }
   
-  return false;
+  return changes;
+}
+
+function hasChanges(currentResults, previousState) {
+  return getChangedServices(currentResults, previousState).length > 0;
 }
 
 async function main() {
@@ -169,7 +204,8 @@ async function main() {
   console.log(new Date().toISOString(), "\n" + lines.join("\n"));
 
   const previousState = loadPreviousState();
-  const shouldNotify = hasChanges(results, previousState);
+  const changedServices = getChangedServices(results, previousState);
+  const shouldNotify = changedServices.length > 0;
   
   const currentState = {};
   results.forEach(r => currentState[r.url] = r.up);
@@ -190,16 +226,16 @@ async function main() {
   });
 
   if (shouldNotify || forceReport) {
-    const statusMessage = formatStatusMessage(results, timestamp, executionTime);
+    const statusMessage = formatStatusMessage(results, timestamp, executionTime, forceReport, changedServices);
     await notify(statusMessage);
     
     if (forceReport) {
       console.log("Manual status report sent to Discord");
     } else {
-      console.log("Status notification sent to Discord");
+      console.log("Status change notification sent to Discord");
     }
   } else {
-    console.log("All services up and no changes detected - no notifications sent");
+    console.log("No status changes detected - no notifications sent");
   }
 }
 
