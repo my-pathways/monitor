@@ -1,0 +1,25 @@
+{
+  "name": "monitor",
+  "version": "1.0.0",
+  "description": "Web services monitoring system with Discord notifications",
+  "type": "module",
+  "main": "monitor.mjs",
+  "scripts": {
+    "start": "node monitor.mjs",
+    "monitor": "node monitor.mjs",
+    "status": "FORCE_STATUS_REPORT=true node monitor.mjs",
+    "test": "node monitor.mjs"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "monitoring",
+    "discord",
+    "webhook",
+    "health-check"
+  ],
+  "author": "my-pathways",
+  "license": "UNLICENSED",
+  "private": true
+}
