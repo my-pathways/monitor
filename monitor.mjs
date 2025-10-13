@@ -96,6 +96,32 @@ function fmt(result) {
   return `✅ OK: **${envName}** - ${result.url} (${result.ms} ms, status=${result.status})`;
 }
 
+function formatStatusMessage(results, timestamp, executionTime) {
+  const upServices = results.filter(r => r.up);
+  const downServices = results.filter(r => !r.up);
+  
+  let message = "📊 **SERVICE STATUS UPDATES**\n\n";
+  
+  if (upServices.length > 0) {
+    message += "🟢 **Services Up**\n";
+    upServices.forEach(service => {
+      message += `✅ **${service.name}** - ${service.url} (${service.ms} ms, status=${service.status})\n`;
+    });
+  }
+  
+  if (downServices.length > 0) {
+    if (upServices.length > 0) message += "\n";
+    message += "🔴 **Services Down**\n";
+    downServices.forEach(service => {
+      message += `❌ **${service.name}** - ${service.url} (status=${service.status}, error=${service.error ?? "n/a"})\n`;
+    });
+  }
+  
+  message += `\n⏰ **${timestamp} ART** | 🕐 Execution time: ${executionTime}ms`;
+  
+  return message;
+}
+
 function loadPreviousState() {
   try {
     const data = readFileSync(STATE_FILE, "utf8");
@@ -113,39 +139,37 @@ function savePreviousState(state) {
   }
 }
 
-function detectChanges(currentResults, previousState) {
-  const changes = [];
-  
+function hasChanges(currentResults, previousState) {
+  // Only return true if there was a real state change
   for (const result of currentResults) {
     const wasUp = previousState[result.url];
     const isUp = result.up;
     
+    // If it's the first time we see this service, consider it a change
     if (wasUp === undefined) {
-      if (!isUp) {
-        changes.push({ type: "initial_down", result });
-      }
-      continue;
+      return true;
     }
     
+    // If there was a state change (UP->DOWN or DOWN->UP)
     if (wasUp !== isUp) {
-      if (isUp) {
-        changes.push({ type: "recovered", result });
-      } else {
-        changes.push({ type: "went_down", result });
-      }
+      return true;
     }
   }
   
-  return changes;
+  return false;
 }
 
 async function main() {
+  const startTime = Date.now();
   const results = await Promise.all(TARGETS.map(checkWithRetries));
+  const endTime = Date.now();
+  const executionTime = endTime - startTime;
+  
   const lines = results.map(fmt);
   console.log(new Date().toISOString(), "\n" + lines.join("\n"));
 
   const previousState = loadPreviousState();
-  const changes = detectChanges(results, previousState);
+  const shouldNotify = hasChanges(results, previousState);
   
   const currentState = {};
   results.forEach(r => currentState[r.url] = r.up);
@@ -153,43 +177,44 @@ async function main() {
 
   const forceReport = process.env.FORCE_STATUS_REPORT === "true";
   
-  if (changes.length > 0) {
-    const messages = [];
-    
-    for (const change of changes) {
-      switch (change.type) {
-        case "initial_down":
-          messages.push(`🚨 **INITIAL CHECK - SERVICE DOWN**\n${fmt(change.result)}`);
-          break;
-        case "went_down":
-          messages.push(`🔴 **SERVICE WENT DOWN**\n${fmt(change.result)}`);
-          break;
-        case "recovered":
-          messages.push(`🟢 **SERVICE RECOVERED**\n${fmt(change.result)}`);
-          break;
-      }
-    }
-    
-    if (messages.length > 0) {
-      await notify(messages.join("\n\n"));
-    }
-  } else if (forceReport) {
-    // Send current status report when manually requested
-    const statusMessage = [
-      "📊 **CURRENT STATUS REPORT**",
-      "",
-      ...results.map(fmt)
-    ].join("\n");
-    
+  // Create timestamp
+  const timestamp = new Date().toLocaleString('en-US', { 
+    timeZone: 'America/Argentina/Buenos_Aires',
+    year: 'numeric',
+    month: '2-digit', 
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  });
+
+  if (shouldNotify || forceReport) {
+    const statusMessage = formatStatusMessage(results, timestamp, executionTime);
     await notify(statusMessage);
-    console.log("Manual status report sent to Discord");
+    
+    if (forceReport) {
+      console.log("Manual status report sent to Discord");
+    } else {
+      console.log("Status notification sent to Discord");
+    }
   } else {
-    console.log("No status changes detected - no notifications sent");
+    console.log("All services up and no changes detected - no notifications sent");
   }
 }
 
 main().catch(async (e) => {
   console.error("Fatal:", e);
-  await notify(`❌ Monitor failed: ${e.message || e}`);
+  const timestamp = new Date().toLocaleString('en-US', { 
+    timeZone: 'America/Argentina/Buenos_Aires',
+    year: 'numeric',
+    month: '2-digit', 
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  });
+  await notify(`❌ **Monitor failed**: ${e.message || e}\n\n⏰ **${timestamp} ART**`);
   process.exit(1);
 });

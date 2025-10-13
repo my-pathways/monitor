@@ -6,8 +6,8 @@
   "main": "monitor.mjs",
   "scripts": {
     "start": "node monitor.mjs",
-    "monitor": "node monitor.mjs",
-    "status": "FORCE_STATUS_REPORT=true node monitor.mjs",
+    "monitor": "node monitor.mjs", 
+    "status": "node status.mjs",
     "test": "node monitor.mjs"
   },
   "engines": {
