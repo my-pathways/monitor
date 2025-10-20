@@ -61,3 +61,5 @@ test-local.*
 
 # Monitor state file
 monitor-state.json
+!.monitor/state/
+!.monitor/state/monitor-state.json

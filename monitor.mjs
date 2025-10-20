@@ -212,12 +212,8 @@ async function main() {
 
   const previousState = loadPreviousState();
   const changedServices = getChangedServices(results, previousState);
-  // If there's no previous state (e.g., first run on ephemeral CI) and any service is down,
-  // send a notification so outages are not silently missed.
-  const noPreviousState = !previousState || Object.keys(previousState).length === 0;
-  const anyDown = results.some(r => !r.up);
-  const initialDownAlert = noPreviousState && anyDown;
-  const shouldNotify = changedServices.length > 0 || initialDownAlert;
+  // Notify only on changes; avoid initial alerts when no previous state exists
+  const shouldNotify = changedServices.length > 0;
   
   const currentState = {};
   results.forEach(r => currentState[r.url] = r.up);
@@ -238,14 +234,12 @@ async function main() {
   });
 
   if (shouldNotify || forceReport) {
-    const isFullReport = forceReport || initialDownAlert;
+    const isFullReport = forceReport;
     const statusMessage = formatStatusMessage(results, timestamp, executionTime, isFullReport, changedServices);
     await notify(statusMessage);
     
     if (forceReport) {
       console.log("Manual status report sent to Discord");
-    } else if (initialDownAlert) {
-      console.log("Initial state with down services - full status report sent to Discord");
     } else {
       console.log("Status change notification sent to Discord");
     }
