@@ -12,6 +12,9 @@ on:
   push:
     branches: [ main ]
 
+permissions:
+  contents: write
+
 jobs:
   monitor:
     runs-on: ubuntu-latest
@@ -19,11 +22,17 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
     
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version: '18'
+
+    - name: Prepare state path
+      run: |
+        mkdir -p .monitor/state
     
     - name: Run service monitor
       env:
@@ -31,6 +40,19 @@ jobs:
         PROD_MONITOR_URL: ${{ secrets.PROD_MONITOR_URL }}
         STAGING_MONITOR_URL: ${{ secrets.STAGING_MONITOR_URL }}
         DEV_MONITOR_URL: ${{ secrets.DEV_MONITOR_URL }}
+        STATE_FILE_PATH: .monitor/state/monitor-state.json
         # Force status report when manually triggered
         FORCE_STATUS_REPORT: ${{ github.event_name == 'workflow_dispatch' && 'true' || 'false' }}
       run: node monitor.mjs
+
+    - name: Commit state (if changed)
+      run: |
+        if [[ -n "$(git status --porcelain .monitor/state)" ]]; then
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .monitor/state/monitor-state.json
+          git commit -m "chore(monitor): update state [skip ci]"
+          git push
+        else
+          echo "No state changes to commit"
+        fi

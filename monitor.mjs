@@ -1,5 +1,6 @@
 import { setTimeout as wait } from "node:timers/promises";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { dirname } from "node:path";
 
 const TARGETS = [
   { 
@@ -28,7 +29,9 @@ const TARGETS = [
 const RETRIES = 2;
 const COOLDOWN_MS = 1000;
 const SLOW_THRESHOLD_MS = 2500;
-const STATE_FILE = "/tmp/monitor-state.json";
+// Allow overriding the state file path so we can persist state across CI runs (e.g., commit to repo)
+// Defaults to /tmp for local/ephemeral environments
+const STATE_FILE = process.env.STATE_FILE_PATH || "/tmp/monitor-state.json";
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL || "";
 
 async function notify(message) {
@@ -159,6 +162,10 @@ function loadPreviousState() {
 
 function savePreviousState(state) {
   try {
+    // Ensure parent directory exists if a custom path is used
+    try {
+      mkdirSync(dirname(STATE_FILE), { recursive: true });
+    } catch {}
     writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
   } catch (err) {
     console.warn("Could not save state:", err.message);
@@ -205,7 +212,12 @@ async function main() {
 
   const previousState = loadPreviousState();
   const changedServices = getChangedServices(results, previousState);
-  const shouldNotify = changedServices.length > 0;
+  // If there's no previous state (e.g., first run on ephemeral CI) and any service is down,
+  // send a notification so outages are not silently missed.
+  const noPreviousState = !previousState || Object.keys(previousState).length === 0;
+  const anyDown = results.some(r => !r.up);
+  const initialDownAlert = noPreviousState && anyDown;
+  const shouldNotify = changedServices.length > 0 || initialDownAlert;
   
   const currentState = {};
   results.forEach(r => currentState[r.url] = r.up);
@@ -226,11 +238,14 @@ async function main() {
   });
 
   if (shouldNotify || forceReport) {
-    const statusMessage = formatStatusMessage(results, timestamp, executionTime, forceReport, changedServices);
+    const isFullReport = forceReport || initialDownAlert;
+    const statusMessage = formatStatusMessage(results, timestamp, executionTime, isFullReport, changedServices);
     await notify(statusMessage);
     
     if (forceReport) {
       console.log("Manual status report sent to Discord");
+    } else if (initialDownAlert) {
+      console.log("Initial state with down services - full status report sent to Discord");
     } else {
       console.log("Status change notification sent to Discord");
     }
