@@ -18,13 +18,14 @@ const TARGETS = [
   //   expectText: null,
   //   timeoutMs: 8000
   // },
-  {
-    name: "Development",
-    url: process.env.DEV_MONITOR_URL,
-    expectStatus: 200,
-    expectText: null,
-    timeoutMs: 6000
-  },
+  // Development monitoring removed to save GitHub Actions minutes
+  // {
+  //   name: "Development",
+  //   url: process.env.DEV_MONITOR_URL,
+  //   expectStatus: 200,
+  //   expectText: null,
+  //   timeoutMs: 6000
+  // },
 ].filter(target => target.url);
 
 const RETRIES = 2;
