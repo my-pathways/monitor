@@ -3,26 +3,27 @@ import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 
 const TARGETS = [
-  { 
+  {
     name: "Production",
-    url: process.env.PROD_MONITOR_URL, 
-    expectStatus: 200, 
-    expectText: null, 
-    timeoutMs: 8000 
+    url: process.env.PROD_MONITOR_URL,
+    expectStatus: 200,
+    expectText: null,
+    timeoutMs: 8000
   },
-  { 
-    name: "Staging",
-    url: process.env.STAGING_MONITOR_URL, 
-    expectStatus: 200, 
-    expectText: null, 
-    timeoutMs: 8000 
-  },
-  { 
+  // Staging monitoring moved to AWS CloudWatch alarms
+  // {
+  //   name: "Staging",
+  //   url: process.env.STAGING_MONITOR_URL,
+  //   expectStatus: 200,
+  //   expectText: null,
+  //   timeoutMs: 8000
+  // },
+  {
     name: "Development",
-    url: process.env.DEV_MONITOR_URL, 
-    expectStatus: 200, 
-    expectText: null, 
-    timeoutMs: 6000 
+    url: process.env.DEV_MONITOR_URL,
+    expectStatus: 200,
+    expectText: null,
+    timeoutMs: 6000
   },
 ].filter(target => target.url);
 
