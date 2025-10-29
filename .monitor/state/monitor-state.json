@@ -1,5 +1,5 @@
 {
   "https://api.mypathways.com/": true,
-  "https://api.staging.mypathways.com/": true,
-  "https://api.dev.mypathways.com/": true
+  "https://api.staging.mypathways.com/": false,
+  "https://api.dev.mypathways.com/": false
 }
